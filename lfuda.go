@@ -82,7 +82,7 @@ func (c *Cache) ContainsOrSet(key, value interface{}) (ok, set bool) {
 }
 
 // PeekOrSet checks if a key is in the cache without updating the
-// recent-ness or deleting it for being stale, and if not, adds the value.
+// hits or deleting it for being stale, and if not, adds the value.
 // Returns whether found and whether the key/value was set or not.
 func (c *Cache) PeekOrSet(key, value interface{}) (previous interface{}, ok, set bool) {
 	c.lock.Lock()

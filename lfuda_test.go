@@ -188,3 +188,117 @@ func TestLFUDAContains(t *testing.T) {
 		t.Errorf("should not be able to set (yet)")
 	}
 }
+
+// test that ContainsOrSet doesn't update recent-ness
+func TestLFUDAContainsOrSet(t *testing.T) {
+	l := New(2)
+
+	l.Set(1, 1)
+	l.Set(2, 2)
+	contains, set := l.ContainsOrSet(1, 1)
+	if !contains {
+		t.Errorf("1 should be contained")
+	}
+	if set {
+		t.Errorf("nothing should have been set")
+	}
+
+	contains, set = l.ContainsOrSet(3, 3)
+	if contains {
+		t.Errorf("3 should not have been contained")
+	}
+	if set {
+		t.Errorf("an eviction should not have occurred and 3 should not have been set")
+	}
+
+	l.Get(3)
+	contains, set = l.ContainsOrSet(3, 3)
+	if contains {
+		t.Errorf("3 should not have been contained")
+	}
+	if !set {
+		t.Errorf("an eviction should have occurred and 3 should have been set")
+	}
+}
+
+// test that PeekOrSet doesn't update recent-ness
+func TestLFUDAPeekOrSet(t *testing.T) {
+	l := New(2)
+
+	l.Set(1, 1)
+	l.Set(2, 2)
+	previous, contains, set := l.PeekOrSet(1, 1)
+	if !contains {
+		t.Errorf("1 should be contained")
+	}
+	if set {
+		t.Errorf("nothing should have been set here")
+	}
+	if previous != 1 {
+		t.Errorf("previous is not equal to 1")
+	}
+
+	_, contains, set = l.PeekOrSet(3, 3)
+	if contains {
+		t.Errorf("3 should not have been contained")
+	}
+	if set {
+		t.Errorf("nothing should have been set here")
+	}
+
+	l.Get(3)
+	_, contains, set = l.PeekOrSet(3, 3)
+	if contains {
+		t.Errorf("3 should not have been contained")
+	}
+	if !set {
+		t.Errorf("3 should be set")
+	}
+
+	previous, contains, set = l.PeekOrSet(3, 3)
+	if previous != 3 {
+		t.Errorf("3 should be returned")
+	}
+	if !contains {
+		t.Errorf("3 should have been contained")
+	}
+	if set {
+		t.Errorf("nothing should be set here")
+	}
+}
+
+// test that Peek doesn't update recent-ness
+func TestLFUDAPeek(t *testing.T) {
+	l := New(2)
+
+	l.Set(1, 1)
+	l.Set(2, 2)
+	if v, ok := l.Peek(1); !ok || v != 1 {
+		t.Errorf("1 should be set to 1: %v, %v", v, ok)
+	}
+
+	l.Get(3)
+	l.Get(2)
+	l.Set(3, 3)
+	if l.Contains(1) {
+		t.Errorf("should not have updated hits for 1")
+	}
+}
+
+func TestLFUDARemove(t *testing.T) {
+	l := New(2)
+
+	l.Set(1, 1)
+	l.Set(2, 2)
+	if v, ok := l.Get(1); !ok || v != 1 {
+		t.Errorf("1 should be set to 1: %v, %v", v, ok)
+	}
+
+	l.Remove(1)
+	if _, ok := l.Get(1); ok {
+		t.Errorf("1 should not be in the cache")
+	}
+	if l.Len() != 1 {
+		t.Errorf("Cache should be length 1 (but it wasn't)")
+	}
+}
