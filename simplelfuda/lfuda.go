@@ -4,9 +4,6 @@ import (
 	"container/list"
 )
 
-// EvictCallback is used to get a callback when a LFUDA entry is evicted
-type EvictCallback func(key interface{}, value interface{})
-
 /*
 Differences between LFUDA and regular LFU cache:
   * Every cache miss increases "misses"" counter by 1, but only up to the frequency of the top item's key
@@ -17,6 +14,10 @@ Differences between LFUDA and regular LFU cache:
   * When an existing item is updated, its "freq" counter is incremented by 1 to at least "misses" + 1.
 */
 
+// EvictCallback is used to get a callback when a LFUDA entry is evicted
+type EvictCallback func(key interface{}, value interface{})
+
+// LFUDA is a non-threadsafe fixed size LFU with Dynamic Aging Cache
 type LFUDA struct {
 	size    int
 	items   map[interface{}]*item
@@ -32,6 +33,7 @@ type item struct {
 	element *list.Element
 }
 
+// NewLFUDA constructs an LFUDA of the given size
 func NewLFUDA(size int, onEvict EvictCallback) *LFUDA {
 	return &LFUDA{
 		size:    size,
@@ -42,6 +44,7 @@ func NewLFUDA(size int, onEvict EvictCallback) *LFUDA {
 	}
 }
 
+// Get looks up a key's value from the cache
 func (l *LFUDA) Get(key interface{}) (interface{}, bool) {
 	if e, ok := l.items[key]; ok {
 		l.increment(e)
@@ -55,6 +58,7 @@ func (l *LFUDA) Get(key interface{}) (interface{}, bool) {
 	return nil, false
 }
 
+// Peek looks up a key's value from the cache but will not increment the items hit counter
 func (l *LFUDA) Peek(key interface{}) (interface{}, bool) {
 	if e, ok := l.items[key]; ok {
 		return e.value, true
@@ -88,6 +92,7 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 	return true
 }
 
+// Len returns the number of items in the cache.
 func (l *LFUDA) Len() int {
 	return len(l.items)
 }
@@ -135,7 +140,7 @@ func (l *LFUDA) increment(e *item) {
 	}
 }
 
-// Completely clear the LFUDA cache
+// Purge will completely clear the LFUDA cache
 func (l *LFUDA) Purge() {
 	for k, v := range l.items {
 		if l.onEvict != nil {
@@ -153,6 +158,8 @@ func (l *LFUDA) Contains(key interface{}) (ok bool) {
 	return ok
 }
 
+// Remove removes the provided key from the cache, returning if the
+// key was contained
 func (l *LFUDA) Remove(key interface{}) bool {
 	if item, ok := l.items[key]; ok {
 		if l.onEvict != nil {
@@ -165,6 +172,7 @@ func (l *LFUDA) Remove(key interface{}) bool {
 	return false
 }
 
+// Keys returns a slice of the keys in the cache, from oldest to newest.
 func (l *LFUDA) Keys() []interface{} {
 	keys := make([]interface{}, len(l.items))
 	var i = 0

@@ -33,12 +33,12 @@ func (c *Cache) Purge() {
 	c.lock.Unlock()
 }
 
-// Add adds a value to the cache. Returns true if an eviction occurred.
-func (c *Cache) Set(key, value interface{}) (evicted bool) {
+// Set adds a value to the cache. Returns true if an eviction occurred.
+func (c *Cache) Set(key, value interface{}) (ok bool) {
 	c.lock.Lock()
-	evicted = c.lfuda.Set(key, value)
+	ok = c.lfuda.Set(key, value)
 	c.lock.Unlock()
-	return evicted
+	return ok
 }
 
 // Get looks up a key's value from the cache.
@@ -67,24 +67,24 @@ func (c *Cache) Peek(key interface{}) (value interface{}, ok bool) {
 	return value, ok
 }
 
-// ContainsOrAdd checks if a key is in the cache without updating the
+// ContainsOrSet checks if a key is in the cache without updating the
 // recent-ness or deleting it for being stale, and if not, adds the value.
-// Returns whether found and whether an eviction occurred.
-func (c *Cache) ContainsOrSet(key, value interface{}) (ok, evicted bool) {
+// Returns whether found and whether the key/value was set or not.
+func (c *Cache) ContainsOrSet(key, value interface{}) (ok, set bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	if c.lfuda.Contains(key) {
 		return true, false
 	}
-	evicted = c.lfuda.Set(key, value)
-	return false, evicted
+	set = c.lfuda.Set(key, value)
+	return false, set
 }
 
-// PeekOrAdd checks if a key is in the cache without updating the
+// PeekOrSet checks if a key is in the cache without updating the
 // recent-ness or deleting it for being stale, and if not, adds the value.
-// Returns whether found and whether an eviction occurred.
-func (c *Cache) PeekOrSet(key, value interface{}) (previous interface{}, ok, evicted bool) {
+// Returns whether found and whether the key/value was set or not.
+func (c *Cache) PeekOrSet(key, value interface{}) (previous interface{}, ok, set bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -93,8 +93,8 @@ func (c *Cache) PeekOrSet(key, value interface{}) (previous interface{}, ok, evi
 		return previous, true, false
 	}
 
-	evicted = c.lfuda.Set(key, value)
-	return nil, false, evicted
+	set = c.lfuda.Set(key, value)
+	return nil, false, set
 }
 
 // Remove removes the provided key from the cache.
