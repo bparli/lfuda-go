@@ -3,7 +3,7 @@ package lfuda
 import (
 	"sync"
 
-	"github.com/bparli/go-lfuda/simplelfuda"
+	"github.com/bparli/lfuda-go/simplelfuda"
 )
 
 // Cache is a thread-safe fixed size lfuda cache.
