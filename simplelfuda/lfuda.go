@@ -7,10 +7,10 @@ import (
 /*
 Differences between LFUDA and regular LFU cache:
   * Every cache miss increases "misses"" counter by 1, but only up to the frequency of the top item's key
-    (the item's "freq" counter)
+    (the item's "hits" counter)
   * When the cache is at max size, setting a item will only be successful if the misses "misses" counter
-    is >= the least frequency used item's "freq" counter
-  * When setting a new item, its "freq" counter should be set to the current "misses" value
+    is >= the least frequency used item's "hits" counter
+  * When setting a new item, its "hits" counter should be set to the current "misses" value
   * When an existing item is updated, its "freq" counter is incremented by 1 to at least "misses" + 1.
 */
 
@@ -29,7 +29,7 @@ type LFUDA struct {
 type item struct {
 	key     interface{}
 	value   interface{}
-	freq    int
+	hits    int
 	element *list.Element
 }
 
@@ -51,7 +51,7 @@ func (l *LFUDA) Get(key interface{}) (interface{}, bool) {
 		return e.value, true
 	}
 	// only increase misses up to the most hits in the cache
-	if l.misses < l.freqs.Back().Value.(*item).freq {
+	if len(l.items) > 0 && l.misses < l.freqs.Back().Value.(*item).hits {
 		l.misses++
 	}
 
@@ -76,7 +76,7 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 		// check if we need to evict
 		if len(l.items) >= l.size {
 			// don't evict yet, not until misses > the lowest freq
-			if l.misses < l.freqs.Front().Value.(*item).freq {
+			if l.misses < l.freqs.Front().Value.(*item).hits {
 				return false
 			}
 			l.evict(1)
@@ -117,23 +117,23 @@ func (l *LFUDA) increment(e *item) {
 	var nextPlace *list.Element
 	if e.element == nil {
 		// new entry
-		e.freq = l.misses + 1
+		e.hits = l.misses + 1
 		e.element = l.freqs.PushFront(e)
 	} else {
-		if e.freq < l.misses {
-			e.freq = l.misses
+		if e.hits < l.misses {
+			e.hits = l.misses
 		}
-		e.freq++
+		e.hits++
 		for {
-			// move up until freq is < next element's
+			// move up until hits is < next element's
 			nextPlace = e.element.Next()
 			// we've reached the back
 			if nextPlace == nil {
 				l.freqs.MoveToBack(e.element)
 				break
-			} else if e.freq <= nextPlace.Value.(*item).freq {
+			} else if e.hits <= nextPlace.Value.(*item).hits {
 				break
-			} else if e.freq > nextPlace.Value.(*item).freq {
+			} else if e.hits > nextPlace.Value.(*item).hits {
 				l.freqs.MoveAfter(e.element, nextPlace.Value.(*item).element)
 			}
 		}
@@ -148,6 +148,7 @@ func (l *LFUDA) Purge() {
 		}
 		delete(l.items, k)
 	}
+	l.misses = 0
 	l.freqs.Init()
 }
 
@@ -172,12 +173,12 @@ func (l *LFUDA) Remove(key interface{}) bool {
 	return false
 }
 
-// Keys returns a slice of the keys in the cache, from oldest to newest.
+// Keys returns a slice of the keys in the cache ordered by frequency
 func (l *LFUDA) Keys() []interface{} {
 	keys := make([]interface{}, len(l.items))
-	var i = 0
-	for k := range l.items {
-		keys[i] = k
+	i := 0
+	for ent := l.freqs.Back(); ent != nil; ent = ent.Prev() {
+		keys[i] = ent.Value.(*item).key
 		i++
 	}
 	return keys
