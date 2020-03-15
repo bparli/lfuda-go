@@ -27,4 +27,7 @@ type LFUDACache interface {
 
 	// Clears all cache entries.
 	Purge()
+
+	// Returns current age factor of the cache
+	Age() int
 }

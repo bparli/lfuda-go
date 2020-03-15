@@ -6,12 +6,10 @@ import (
 
 /*
 Differences between LFUDA and regular LFU cache:
-  * Every cache miss increases "misses"" counter by 1, but only up to the frequency of the top item's key
-    (the item's "hits" counter)
-  * When the cache is at max size, setting a item will only be successful if the misses "misses" counter
-    is >= the least frequency used item's "hits" counter
-  * When setting a new item, its "hits" counter should be set to the current "misses" value
-  * When an existing item is updated, its "freq" counter is incremented by 1 to at least "misses" + 1.
+  * The cache dynamically "ages" through a global "age" counter
+  * Every cache eviction sets the global "age" counter to the evicted item's hits counter,
+  * When setting a new item, its "hits" counter should be set to the cache's "age" value
+  * When an existing item is updated, its "hits" counter is incremented by 1 to at least "age" + 1.
 */
 
 // EvictCallback is used to get a callback when a LFUDA entry is evicted
@@ -23,7 +21,7 @@ type LFUDA struct {
 	items   map[interface{}]*item
 	freqs   *list.List
 	onEvict EvictCallback
-	misses  int
+	age     int
 }
 
 type item struct {
@@ -40,7 +38,7 @@ func NewLFUDA(size int, onEvict EvictCallback) *LFUDA {
 		items:   make(map[interface{}]*item),
 		freqs:   list.New(),
 		onEvict: onEvict,
-		misses:  0,
+		age:     0,
 	}
 }
 
@@ -49,10 +47,6 @@ func (l *LFUDA) Get(key interface{}) (interface{}, bool) {
 	if e, ok := l.items[key]; ok {
 		l.increment(e)
 		return e.value, true
-	}
-	// only increase misses up to the most hits in the cache
-	if len(l.items) > 0 && l.misses < l.freqs.Back().Value.(*item).hits {
-		l.misses++
 	}
 
 	return nil, false
@@ -66,8 +60,9 @@ func (l *LFUDA) Peek(key interface{}) (interface{}, bool) {
 	return nil, false
 }
 
-// Set adds a value to the cache.  Returns true if value was set, false otherwise.
+// Set adds a value to the cache.  Returns true if an eviction occurred.
 func (l *LFUDA) Set(key interface{}, value interface{}) bool {
+	evicted := false
 	if e, ok := l.items[key]; ok {
 		// value already exists for key.  overwrite
 		e.value = value
@@ -75,11 +70,8 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 	} else {
 		// check if we need to evict
 		if len(l.items) >= l.size {
-			// don't evict yet, not until misses > the lowest freq
-			if l.misses < l.freqs.Front().Value.(*item).hits {
-				return false
-			}
 			l.evict(1)
+			evicted = true
 		}
 
 		// value doesn't exist.  insert
@@ -89,7 +81,7 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 		l.items[key] = e
 		l.increment(e)
 	}
-	return true
+	return evicted
 }
 
 // Len returns the number of items in the cache.
@@ -102,6 +94,10 @@ func (l *LFUDA) evict(count int) int {
 	for i := 0; i < count; i++ {
 		if elem := l.freqs.Front(); elem != nil {
 			entry := elem.Value.(*item)
+
+			// set age to the value of the evicted object
+			// cache age should be less than or equal to the minimum key value in the cache
+			l.age = entry.hits
 			delete(l.items, entry.key)
 			l.freqs.Remove(elem)
 			if l.onEvict != nil {
@@ -117,25 +113,26 @@ func (l *LFUDA) increment(e *item) {
 	var nextPlace *list.Element
 	if e.element == nil {
 		// new entry
-		e.hits = l.misses + 1
+		e.hits = l.age + 1
 		e.element = l.freqs.PushFront(e)
 	} else {
-		if e.hits < l.misses {
-			e.hits = l.misses
+		if e.hits < l.age {
+			e.hits = l.age
 		}
 		e.hits++
-		for {
-			// move up until hits is < next element's
-			nextPlace = e.element.Next()
-			// we've reached the back
-			if nextPlace == nil {
-				l.freqs.MoveToBack(e.element)
-				break
-			} else if e.hits <= nextPlace.Value.(*item).hits {
-				break
-			} else if e.hits > nextPlace.Value.(*item).hits {
-				l.freqs.MoveAfter(e.element, nextPlace.Value.(*item).element)
-			}
+	}
+
+	for {
+		// move up until hits is < next element's
+		nextPlace = e.element.Next()
+		// we've reached the back
+		if nextPlace == nil {
+			l.freqs.MoveToBack(e.element)
+			break
+		} else if e.hits <= nextPlace.Value.(*item).hits {
+			break
+		} else if e.hits > nextPlace.Value.(*item).hits {
+			l.freqs.MoveAfter(e.element, nextPlace.Value.(*item).element)
 		}
 	}
 }
@@ -148,7 +145,7 @@ func (l *LFUDA) Purge() {
 		}
 		delete(l.items, k)
 	}
-	l.misses = 0
+	l.age = 0
 	l.freqs.Init()
 }
 
@@ -182,4 +179,9 @@ func (l *LFUDA) Keys() []interface{} {
 		i++
 	}
 	return keys
+}
+
+// Age returns the cache age factor
+func (l *LFUDA) Age() int {
+	return l.age
 }

@@ -90,19 +90,18 @@ func TestLFUDA(t *testing.T) {
 		t.Fatalf("bad len: %v", l.Len())
 	}
 
-	// rest should not have been set since misses is still 0
 	if numSet != 128 {
 		t.Fatalf("bad evict count: %v", evictCounter)
 	}
 
 	for i, k := range l.Keys() {
-		if v, ok := l.Get(k); !ok || v != k || v != i {
+		if v, ok := l.Get(k); !ok || v != k || v != i+128 {
 			t.Fatalf("bad key: %v, %v, %t, %d", k, v, ok, i)
 		}
 	}
 
-	// bummp the hits counter of each item in cache
-	for i := 0; i < 128; i++ {
+	// bump the hits counter of each item in cache
+	for i := 128; i < 256; i++ {
 		_, ok := l.Get(i)
 		if !ok {
 			t.Fatalf("should not be evicted")
@@ -110,7 +109,7 @@ func TestLFUDA(t *testing.T) {
 	}
 
 	// these should all be misses
-	for i := 128; i < 256; i++ {
+	for i := 0; i < 128; i++ {
 		_, ok := l.Get(i)
 		if ok {
 			t.Fatalf("should not be in cache")
@@ -121,11 +120,9 @@ func TestLFUDA(t *testing.T) {
 		t.Fatalf("Wasn't able to set key/value in cache (but should have been)")
 	}
 
-	// expect 256 to be last key in l.Keys()
-	for i, k := range l.Keys() {
-		if i == 127 && k != 256 {
-			t.Fatalf("out of order key: %v", k)
-		}
+	// expect 256 to be the top hit in l.Keys()
+	if l.Keys()[0] != 256 {
+		t.Fatalf("out of order key (256 should be first)")
 	}
 
 	if val, _ := l.Get(256); val != 256 {
@@ -150,42 +147,36 @@ func TestLFUDASet(t *testing.T) {
 
 	l := NewWithEvict(1, onEvicted)
 
-	if l.Set(1, 1) == false || evictCounter != 0 {
-		t.Errorf("should be able to set")
+	if l.Set(1, 1) == true || evictCounter != 0 {
+		t.Errorf("should not have evicted")
 	}
-	if l.Set(2, 2) == true || evictCounter != 0 {
-		t.Errorf("should not be able to set (yet)")
-	}
-	// trigger a miss
-	l.Get(2)
-
-	// now try setting again
 	if l.Set(2, 2) == false || evictCounter != 1 {
-		t.Errorf("should be able to set (yet) and an eviction should have occurred")
+		t.Errorf("should have evicted")
 	}
 }
 
 // test that Contains doesn't update recent-ness
 func TestLFUDAContains(t *testing.T) {
-	evictCounter := 0
-	onEvicted := func(k interface{}, v interface{}) {
-		evictCounter++
+	l := NewWithEvict(2, nil)
+	l.Set(1, 1)
+	l.Set(2, 2)
+
+	// bump 1 hits
+	for i := 0; i < 10; i++ {
+		l.Get(1)
 	}
 
-	l := NewWithEvict(1, onEvicted)
-
-	if l.Set(1, 1) == false || evictCounter != 0 {
-		t.Errorf("should be able to set")
+	if l.Keys()[0] != 1 {
+		t.Errorf("key 1 should be the most frequently used")
 	}
-	if l.Set(2, 2) == true || evictCounter != 0 {
-		t.Errorf("should not be able to set (yet)")
-	}
-	// should not trigger a miss
-	l.Contains(2)
 
-	// now try setting again
-	if l.Set(2, 2) == true || evictCounter != 0 {
-		t.Errorf("should not be able to set (yet)")
+	// should not bump 2 hits
+	for i := 0; i < 20; i++ {
+		l.Contains(2)
+	}
+
+	if l.Keys()[0] != 1 {
+		t.Errorf("key 1 should be the most frequently used")
 	}
 }
 
@@ -195,29 +186,20 @@ func TestLFUDAContainsOrSet(t *testing.T) {
 
 	l.Set(1, 1)
 	l.Set(2, 2)
-	contains, set := l.ContainsOrSet(1, 1)
+	contains, eviction := l.ContainsOrSet(1, 1)
 	if !contains {
 		t.Errorf("1 should be contained")
 	}
-	if set {
+	if eviction {
 		t.Errorf("nothing should have been set")
 	}
 
-	contains, set = l.ContainsOrSet(3, 3)
+	contains, eviction = l.ContainsOrSet(3, 3)
 	if contains {
 		t.Errorf("3 should not have been contained")
 	}
-	if set {
-		t.Errorf("an eviction should not have occurred and 3 should not have been set")
-	}
-
-	l.Get(3)
-	contains, set = l.ContainsOrSet(3, 3)
-	if contains {
-		t.Errorf("3 should not have been contained")
-	}
-	if !set {
-		t.Errorf("an eviction should have occurred and 3 should have been set")
+	if !eviction {
+		t.Errorf("3 should have been set and an eviction should have occurred")
 	}
 }
 
@@ -242,17 +224,17 @@ func TestLFUDAPeekOrSet(t *testing.T) {
 	if contains {
 		t.Errorf("3 should not have been contained")
 	}
-	if set {
-		t.Errorf("nothing should have been set here")
+	if !set {
+		t.Errorf("3 should have been set here")
 	}
 
 	l.Get(3)
 	_, contains, set = l.PeekOrSet(3, 3)
-	if contains {
-		t.Errorf("3 should not have been contained")
+	if !contains {
+		t.Errorf("3 should have been contained")
 	}
-	if !set {
-		t.Errorf("3 should be set")
+	if set {
+		t.Errorf("3 should not have been set")
 	}
 
 	previous, contains, set = l.PeekOrSet(3, 3)
@@ -277,7 +259,6 @@ func TestLFUDAPeek(t *testing.T) {
 		t.Errorf("1 should be set to 1: %v, %v", v, ok)
 	}
 
-	l.Get(3)
 	l.Get(2)
 	l.Set(3, 3)
 	if l.Contains(1) {

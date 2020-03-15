@@ -57,49 +57,40 @@ func TestCacheFull(t *testing.T) {
 	}
 
 	c := NewLFUDA(3, onEvicted)
-	if ok := c.Set("a", "a"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
+	c.Set("a", "a")
 	if _, ok := c.Get("a"); !ok {
 		t.Errorf("Key not found (but it should be)")
 	}
-	if ok := c.Set("b", "b"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
+	c.Set("b", "b")
 	if _, ok := c.Get("b"); !ok {
 		t.Errorf("Key not found (but it should be)")
 	}
-	if ok := c.Set("c", "evict"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
+	if evict := c.Set("c", "evict"); evict {
+		t.Errorf("Set op resulted in an eviction (but it should not have)")
 	}
 
-	c.Set("d", "evict")
-	c.Set("e", "evict")
+	if evict := c.Set("d", "evict"); !evict {
+		t.Errorf("Set op did not result in an eviction (but it should have)")
+	}
+
+	if c.Age() != 1 {
+		t.Errorf("Cache age should have incremented")
+	}
 
 	if _, ok := c.Get("a"); !ok {
 		t.Errorf("Key not found (but it should be)")
 	}
 
 	if _, ok := c.Get("b"); !ok {
-		t.Errorf("Key not found (but it should be)")
-	}
-
-	if _, ok := c.Get("c"); !ok {
 		t.Errorf("Key not found (but it should be)")
 	}
 }
 
 func TestKeys(t *testing.T) {
 	c := NewLFUDA(3, nil)
-	if ok := c.Set("a", "a"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
-	if ok := c.Set("b", "b"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
-	if ok := c.Set("c", "c"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
+	c.Set("a", "a")
+	c.Set("b", "b")
+	c.Set("c", "c")
 
 	if keys := c.Keys(); len(keys) != 3 || len(keys) != c.Len() {
 		t.Errorf("Should be 3 keys returned from cache")
@@ -108,15 +99,9 @@ func TestKeys(t *testing.T) {
 
 func TestPurge(t *testing.T) {
 	c := NewLFUDA(3, nil)
-	if ok := c.Set("a", "a"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
-	if ok := c.Set("b", "b"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
-	if ok := c.Set("c", "c"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
+	c.Set("a", "a")
+	c.Set("b", "b")
+	c.Set("c", "c")
 
 	if c.Len() != 3 {
 		t.Errorf("Should be 3 keys in cache")
@@ -135,12 +120,9 @@ func TestPurge(t *testing.T) {
 
 func TestPeek(t *testing.T) {
 	c := NewLFUDA(2, nil)
-	if ok := c.Set("a", "a"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
-	if ok := c.Set("b", "b"); !ok {
-		t.Errorf("Set op was not successful (but it should have been)")
-	}
+	c.Set("a", "a")
+	c.Set("b", "b")
+
 	// set key a to more frequent so b will be evicted
 	if _, ok := c.Get("a"); !ok {
 		t.Errorf("Key not found (but it should be)")
@@ -151,12 +133,12 @@ func TestPeek(t *testing.T) {
 	}
 	c.Peek("b")
 
-	if ok := c.Set("c", "c"); ok {
-		t.Errorf("Set op successful (but it should NOT have been)")
+	if evicted := c.Set("c", "c"); !evicted {
+		t.Errorf("Set op should have resulted in eviction (but it did not)")
 	}
 
 	// b should be evicted
-	if _, ok := c.Peek("c"); ok {
+	if _, ok := c.Peek("b"); ok {
 		t.Errorf("Key found (but it should not be)")
 	}
 }
@@ -177,30 +159,33 @@ func TestReSet(t *testing.T) {
 
 func TestEvict(t *testing.T) {
 	c := NewLFUDA(3, nil)
-	set := []string{"a", "b", "c"}
+	c.Set("a", "a")
+	c.Set("b", "b")
+	c.Set("c", "c")
 
-	for k := range set {
-		if ok := c.Set(k, k); !ok {
-			t.Errorf("Unable to set key %d", k)
-		}
-		if _, ok := c.Get(k); !ok {
-			t.Errorf("Unable to get key %d", k)
-		}
+	// make key a popular
+	for i := 0; i < 10; i++ {
+		c.Get("a")
 	}
 
-	// should not be able to set a key since misses counter should equal 0
-	if ok := c.Set("oops", "oops"); ok {
-		t.Errorf("Able to set key (but should not have)")
+	// increase cache age
+	for i := 0; i < 20; i++ {
+		c.Set(i, i)
 	}
 
-	// for misses counter
-	for i := 0; i < 2; i++ {
-		c.Get("missing")
+	if c.Age() != 10 {
+		t.Errorf("cache should have aged for each eviction")
 	}
 
-	// now SHOULD be able to set a key since misses counter should equal 2
-	// and the least frequently used item's freq counter should also equal 2
-	if ok := c.Set("huzzah", "huzzah"); !ok {
-		t.Errorf("Not able to set key (but should have been)")
+	if ok := c.Contains("a"); !ok {
+		t.Errorf("cache should have contained key a")
+	}
+
+	// kick out a
+	for i := 0; i < 3; i++ {
+		c.Set(i, i)
+	}
+	if ok := c.Contains("a"); ok {
+		t.Errorf("cache should NOT have contained key a now")
 	}
 }
