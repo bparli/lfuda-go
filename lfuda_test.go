@@ -283,3 +283,20 @@ func TestLFUDARemove(t *testing.T) {
 		t.Errorf("Cache should be length 1 (but it wasn't)")
 	}
 }
+
+func TestLFUDAAge(t *testing.T) {
+	l := New(1)
+
+	l.Set(1, 1)
+
+	// bump hits on key 1 to 2
+	l.Get(1)
+	if evicted := l.Set(2, 2); !evicted {
+		t.Errorf("Set op should have evicted (but it didn't)")
+	}
+
+	// key 1 was evicted so cache age should be its hits value (2)
+	if l.Age() != 2 {
+		t.Errorf("cache age should have been set to 1 (but it was't)")
+	}
+}

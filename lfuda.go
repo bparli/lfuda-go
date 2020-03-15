@@ -120,3 +120,11 @@ func (c *Cache) Len() int {
 	c.lock.RUnlock()
 	return length
 }
+
+// Age returns the cache's current age
+func (c *Cache) Age() int {
+	c.lock.RLock()
+	age := c.lfuda.Age()
+	c.lock.RUnlock()
+	return age
+}
