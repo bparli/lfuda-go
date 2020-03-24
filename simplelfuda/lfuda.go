@@ -2,6 +2,7 @@ package simplelfuda
 
 import (
 	"container/list"
+	"fmt"
 )
 
 /*
@@ -17,28 +18,32 @@ type EvictCallback func(key interface{}, value interface{})
 
 // LFUDA is a non-threadsafe fixed size LFU with Dynamic Aging Cache
 type LFUDA struct {
-	size    int
-	items   map[interface{}]*item
-	freqs   *list.List
-	onEvict EvictCallback
-	age     int
+	// size of the entire cache in bytes
+	size     int
+	currSize int
+	items    map[interface{}]*item
+	freqs    *list.List
+	onEvict  EvictCallback
+	age      int
 }
 
 type item struct {
 	key     interface{}
 	value   interface{}
+	size    int
 	hits    int
 	element *list.Element
 }
 
-// NewLFUDA constructs an LFUDA of the given size
+// NewLFUDA constructs an LFUDA of the given size in bytes
 func NewLFUDA(size int, onEvict EvictCallback) *LFUDA {
 	return &LFUDA{
-		size:    size,
-		items:   make(map[interface{}]*item),
-		freqs:   list.New(),
-		onEvict: onEvict,
-		age:     0,
+		size:     size,
+		currSize: 0,
+		items:    make(map[interface{}]*item),
+		freqs:    list.New(),
+		onEvict:  onEvict,
+		age:      0,
 	}
 }
 
@@ -69,17 +74,33 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 		l.increment(e)
 	} else {
 		// check if we need to evict
-		if len(l.items) >= l.size {
-			l.evict(1)
-			evicted = true
+		// convert to bytes so we can get the size of the value
+		numBytes := len([]byte(fmt.Sprintf("%v", value.(interface{}))))
+
+		// check this value will even fit in the cache.  if not just return
+		if l.size < numBytes {
+			return false
+		}
+
+		// evict until there is room for the new item
+		for {
+			if l.currSize+numBytes > l.size {
+				l.evict(1)
+				evicted = true
+			} else {
+				break
+			}
 		}
 
 		// value doesn't exist.  insert
 		e := new(item)
+		e.size = numBytes
 		e.key = key
 		e.value = value
 		l.items[key] = e
+		l.currSize += numBytes
 		l.increment(e)
+		//fmt.Println("TEST", l.age, e.hits, key, value, count)
 	}
 	return evicted
 }
@@ -89,11 +110,19 @@ func (l *LFUDA) Len() int {
 	return len(l.items)
 }
 
+// Size returns the number of items in the cache.
+func (l *LFUDA) Size() int {
+	return l.currSize
+}
+
 func (l *LFUDA) evict(count int) int {
 	var evicted int
 	for i := 0; i < count; i++ {
 		if elem := l.freqs.Front(); elem != nil {
 			entry := elem.Value.(*item)
+
+			// subtract current size of the cache by the size of the evicted item
+			l.currSize -= entry.size
 
 			// set age to the value of the evicted object
 			// cache age should be less than or equal to the minimum key value in the cache
@@ -146,6 +175,7 @@ func (l *LFUDA) Purge() {
 		delete(l.items, k)
 	}
 	l.age = 0
+	l.currSize = 0
 	l.freqs.Init()
 }
 
@@ -163,6 +193,7 @@ func (l *LFUDA) Remove(key interface{}) bool {
 		if l.onEvict != nil {
 			l.onEvict(item.key, item.value)
 		}
+		l.currSize -= item.size
 		l.freqs.Remove(item.element)
 		delete(l.items, key)
 		return true

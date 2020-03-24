@@ -39,13 +39,14 @@ func TestLFU(t *testing.T) {
 }
 
 func TestCacheSize(t *testing.T) {
+	// 10 bytes total
 	c := NewLFUDA(10, nil)
 
 	for i := 0; i < 100; i++ {
 		c.Set(fmt.Sprintf("%v", i), i)
 	}
-	if c.Len() > 10 {
-		t.Errorf("Failed to evict properly: %v", c.Len())
+	if c.Len() != 5 {
+		t.Errorf("Failed to set or evict properly: %v", c.Len())
 	}
 }
 
@@ -65,11 +66,15 @@ func TestCacheFull(t *testing.T) {
 	if _, ok := c.Get("b"); !ok {
 		t.Errorf("Key not found (but it should be)")
 	}
-	if evict := c.Set("c", "evict"); evict {
+	if evict := c.Set("c", "z"); evict {
 		t.Errorf("Set op resulted in an eviction (but it should not have)")
 	}
 
-	if evict := c.Set("d", "evict"); !evict {
+	if evict := c.Set("d", "too big to store"); evict {
+		t.Errorf("Set op resulted in an eviction (but it should not have)")
+	}
+
+	if evict := c.Set("d", "d"); !evict {
 		t.Errorf("Set op did not result in an eviction (but it should have)")
 	}
 
@@ -169,12 +174,14 @@ func TestEvict(t *testing.T) {
 	}
 
 	// increase cache age
-	for i := 0; i < 20; i++ {
-		c.Set(i, i)
+	for j := 0; j < 2; j++ {
+		for i := 0; i < 10; i++ {
+			c.Set(i, i)
+		}
 	}
 
 	if c.Age() != 10 {
-		t.Errorf("cache should have aged for each eviction")
+		t.Errorf("cache should have aged for each eviction: %d", c.Age())
 	}
 
 	if ok := c.Contains("a"); !ok {
