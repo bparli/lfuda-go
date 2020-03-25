@@ -39,13 +39,14 @@ func TestLFU(t *testing.T) {
 }
 
 func TestCacheSize(t *testing.T) {
+	// 10 bytes total
 	c := NewLFUDA(10, nil)
 
 	for i := 0; i < 100; i++ {
 		c.Set(fmt.Sprintf("%v", i), i)
 	}
-	if c.Len() > 10 {
-		t.Errorf("Failed to evict properly: %v", c.Len())
+	if c.Len() != 5 {
+		t.Errorf("Failed to set or evict properly: %v", c.Len())
 	}
 }
 
@@ -65,11 +66,15 @@ func TestCacheFull(t *testing.T) {
 	if _, ok := c.Get("b"); !ok {
 		t.Errorf("Key not found (but it should be)")
 	}
-	if evict := c.Set("c", "evict"); evict {
+	if evict := c.Set("c", "z"); evict {
 		t.Errorf("Set op resulted in an eviction (but it should not have)")
 	}
 
-	if evict := c.Set("d", "evict"); !evict {
+	if evict := c.Set("d", "too big to store"); evict {
+		t.Errorf("Set op resulted in an eviction (but it should not have)")
+	}
+
+	if evict := c.Set("d", "d"); !evict {
 		t.Errorf("Set op did not result in an eviction (but it should have)")
 	}
 
@@ -169,12 +174,14 @@ func TestEvict(t *testing.T) {
 	}
 
 	// increase cache age
-	for i := 0; i < 20; i++ {
-		c.Set(i, i)
+	for j := 0; j < 2; j++ {
+		for i := 0; i < 10; i++ {
+			c.Set(i, i)
+		}
 	}
 
 	if c.Age() != 10 {
-		t.Errorf("cache should have aged for each eviction")
+		t.Errorf("cache should have aged for each eviction: %d", c.Age())
 	}
 
 	if ok := c.Contains("a"); !ok {
@@ -187,5 +194,48 @@ func TestEvict(t *testing.T) {
 	}
 	if ok := c.Contains("a"); ok {
 		t.Errorf("cache should NOT have contained key a now")
+	}
+}
+
+func TestEvictBigValue(t *testing.T) {
+	c := NewLFUDA(10, nil)
+	c.Set("a", "aaaaaaaa")
+	c.Set("b", "b")
+	c.Set("c", "c")
+
+	if c.Size() != 10 {
+		t.Errorf("cache should have size 10 bytes at this point: %d", c.Size())
+	}
+
+	// make key a popular
+	for i := 0; i < 10; i++ {
+		c.Get("a")
+	}
+
+	// increase cache age
+	for j := 0; j < 2; j++ {
+		for i := 0; i < 10; i++ {
+			c.Set(i, i)
+		}
+	}
+
+	if c.Age() != 10 {
+		t.Errorf("cache should have aged for each eviction: %d", c.Age())
+	}
+
+	if ok := c.Contains("a"); !ok {
+		t.Errorf("cache should have contained key a")
+	}
+
+	// may take couple to evict key a since it will share a frequency node with other keys at this point
+	c.Set("x", "x")
+	c.Set("y", "y")
+
+	if ok := c.Contains("a"); ok {
+		t.Errorf("cache should NOT have contained key a now")
+	}
+
+	if c.Size() > 4 || c.Size() < 3 {
+		t.Errorf("cache should have size 3 or 4 bytes at this point: %d", c.Size())
 	}
 }

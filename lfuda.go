@@ -114,17 +114,25 @@ func (c *Cache) Keys() []interface{} {
 }
 
 // Len returns the number of items in the cache.
-func (c *Cache) Len() int {
+func (c *Cache) Len() (length int) {
 	c.lock.RLock()
-	length := c.lfuda.Len()
+	length = c.lfuda.Len()
 	c.lock.RUnlock()
 	return length
 }
 
-// Age returns the cache's current age
-func (c *Cache) Age() int {
+// Size returns the current size of the cache in bytes.
+func (c *Cache) Size() (size int) {
 	c.lock.RLock()
-	age := c.lfuda.Age()
+	size = c.lfuda.Size()
+	c.lock.RUnlock()
+	return size
+}
+
+// Age returns the cache's current age
+func (c *Cache) Age() (age int) {
+	c.lock.RLock()
+	age = c.lfuda.Age()
 	c.lock.RUnlock()
 	return age
 }

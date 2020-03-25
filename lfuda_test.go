@@ -74,42 +74,36 @@ func TestLFUDA(t *testing.T) {
 	evictCounter := 0
 	onEvicted := func(k interface{}, v interface{}) {
 		if k != v {
-			t.Fatalf("Evict values not equal (%v!=%v)", k, v)
+			t.Errorf("Evict values not equal (%v!=%v)", k, v)
 		}
 		evictCounter++
 	}
-	l := NewWithEvict(128, onEvicted)
+	l := NewWithEvict(666, onEvicted)
 
 	numSet := 0
-	for i := 0; i < 256; i++ {
+	for i := 100; i < 1000; i++ {
 		if l.Set(i, i) {
 			numSet++
 		}
 	}
-	if l.Len() != 128 {
-		t.Fatalf("bad len: %v", l.Len())
+	if l.Len() != 222 || l.Len() != len(l.Keys()) {
+		t.Errorf("bad len: %v", l.Len())
 	}
 
-	if numSet != 128 {
-		t.Fatalf("bad evict count: %v", evictCounter)
+	if evictCounter != 900-222 {
+		t.Errorf("bad evict count: %v", evictCounter)
 	}
 
-	for i, k := range l.Keys() {
-		if v, ok := l.Get(k); !ok || v != k || v != i+128 {
-			t.Fatalf("bad key: %v, %v, %t, %d", k, v, ok, i)
+	for _, k := range l.Keys() {
+		if v, ok := l.Get(k); !ok || v != k {
+			t.Fatalf("bad key: %v, %v, %t", k, v, ok)
 		}
+
 	}
 
-	// bump the hits counter of each item in cache
-	for i := 128; i < 256; i++ {
-		_, ok := l.Get(i)
-		if !ok {
-			t.Fatalf("should not be evicted")
-		}
-	}
-
-	// these should all be misses
-	for i := 0; i < 128; i++ {
+	// these should all be misses since their hits will be too low
+	// relative to newer keys set when the cache is more aged
+	for i := 100; i < 765; i++ {
 		_, ok := l.Get(i)
 		if ok {
 			t.Fatalf("should not be in cache")
@@ -117,24 +111,24 @@ func TestLFUDA(t *testing.T) {
 	}
 
 	if ok := l.Set(256, 256); !ok {
-		t.Fatalf("Wasn't able to set key/value in cache (but should have been)")
+		t.Errorf("Wasn't able to set key/value in cache (but should have been)")
+	}
+
+	if val, _ := l.Get(256); val != 256 {
+		t.Errorf("Wrong value returned for key")
 	}
 
 	// expect 256 to be the top hit in l.Keys()
 	if l.Keys()[0] != 256 {
-		t.Fatalf("out of order key (256 should be first)")
-	}
-
-	if val, _ := l.Get(256); val != 256 {
-		t.Fatalf("Wrong value returned for key")
+		t.Errorf("out of order key (last set of keys should have hits=5 and should be first): %d", l.Keys()[0])
 	}
 
 	l.Purge()
 	if l.Len() != 0 {
-		t.Fatalf("bad len: %v", l.Len())
+		t.Errorf("bad len: %v", l.Len())
 	}
 	if _, ok := l.Get(200); ok {
-		t.Fatalf("should contain nothing")
+		t.Errorf("should contain nothing")
 	}
 }
 
@@ -298,5 +292,22 @@ func TestLFUDAAge(t *testing.T) {
 	// key 1 was evicted so cache age should be its hits value (2)
 	if l.Age() != 2 {
 		t.Errorf("cache age should have been set to 1 (but it was't)")
+	}
+}
+
+func TestLFUDASize(t *testing.T) {
+	l := New(11)
+
+	for i := 10; i < 30; i++ {
+		l.Set(i, i)
+	}
+
+	if l.Size() != 10 {
+		t.Errorf("Cache can only store up to 11 bytes so Size should be divisible by 2")
+	}
+
+	l.Purge()
+	if l.Size() != 0 {
+		t.Errorf("Cache size should be reset to 0 (but it wasn't)")
 	}
 }

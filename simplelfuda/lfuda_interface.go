@@ -25,6 +25,9 @@ type LFUDACache interface {
 	// Returns the number of items in the cache.
 	Len() int
 
+	// Returns the current size of the cache in bytes.
+	Size() int
+
 	// Clears all cache entries.
 	Purge()
 
