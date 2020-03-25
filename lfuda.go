@@ -34,9 +34,9 @@ func (c *Cache) Purge() {
 }
 
 // Set adds a value to the cache. Returns true if an eviction occurred.
-func (c *Cache) Set(key, value interface{}) bool {
+func (c *Cache) Set(key, value interface{}) (ok bool) {
 	c.lock.Lock()
-	ok := c.lfuda.Set(key, value)
+	ok = c.lfuda.Set(key, value)
 	c.lock.Unlock()
 	return ok
 }
@@ -114,25 +114,25 @@ func (c *Cache) Keys() []interface{} {
 }
 
 // Len returns the number of items in the cache.
-func (c *Cache) Len() int {
+func (c *Cache) Len() (length int) {
 	c.lock.RLock()
-	length := c.lfuda.Len()
+	length = c.lfuda.Len()
 	c.lock.RUnlock()
 	return length
 }
 
 // Size returns the current size of the cache in bytes.
-func (c *Cache) Size() int {
+func (c *Cache) Size() (size int) {
 	c.lock.RLock()
-	size := c.lfuda.Size()
+	size = c.lfuda.Size()
 	c.lock.RUnlock()
 	return size
 }
 
 // Age returns the cache's current age
-func (c *Cache) Age() int {
+func (c *Cache) Age() (age int) {
 	c.lock.RLock()
-	age := c.lfuda.Age()
+	age = c.lfuda.Age()
 	c.lock.RUnlock()
 	return age
 }
