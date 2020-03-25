@@ -196,3 +196,45 @@ func TestEvict(t *testing.T) {
 		t.Errorf("cache should NOT have contained key a now")
 	}
 }
+
+func TestEvictBigValue(t *testing.T) {
+	c := NewLFUDA(10, nil)
+	c.Set("a", "aaaaaaaa")
+	c.Set("b", "b")
+	c.Set("c", "c")
+
+	if c.Size() != 10 {
+		t.Errorf("cache should have size 10 bytes at this point: %d", c.Size())
+	}
+
+	// make key a popular
+	for i := 0; i < 10; i++ {
+		c.Get("a")
+	}
+
+	// increase cache age
+	for j := 0; j < 2; j++ {
+		for i := 0; i < 10; i++ {
+			c.Set(i, i)
+		}
+	}
+
+	if c.Age() != 10 {
+		t.Errorf("cache should have aged for each eviction: %d", c.Age())
+	}
+
+	if ok := c.Contains("a"); !ok {
+		t.Errorf("cache should have contained key a")
+	}
+
+	c.Set("x", "x")
+	c.Set("z", "z")
+
+	if ok := c.Contains("a"); ok {
+		t.Errorf("cache should NOT have contained key a now")
+	}
+
+	if c.Size() != 4 {
+		t.Errorf("cache should have size 4 bytes at this point: %d", c.Size())
+	}
+}

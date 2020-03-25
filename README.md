@@ -40,9 +40,8 @@ for i := 0; i < 256; i++ {
 ```
 
 ## Acknowledgements
-* Paper outling LFU with Dynamic Aging [https://www.hpl.hp.com/techreports/98/HPL-98-173.pdf](https://www.hpl.hp.com/techreports/98/HPL-98-173.pdf)
+* Paper outlining LFU with Dynamic Aging [https://www.hpl.hp.com/techreports/98/HPL-98-173.pdf](https://www.hpl.hp.com/techreports/98/HPL-98-173.pdf)
 * Squid proxy implementation [https://www.hpl.hp.com/techreports/1999/HPL-1999-69.html](https://www.hpl.hp.com/techreports/1999/HPL-1999-69.html)
+* O(1) LFU algorithm paper [http://dhruvbird.com/lfu.pdf](http://dhruvbird.com/lfu.pdf)
+* Nice LFU implementation in Go [https://github.com/dgrijalva/lfu-go](https://github.com/dgrijalva/lfu-go)
 * Interface patterned after [golang-lru](https://github.com/hashicorp/golang-lru)
-
-
-

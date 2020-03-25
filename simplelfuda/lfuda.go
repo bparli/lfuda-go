@@ -28,11 +28,16 @@ type LFUDA struct {
 }
 
 type item struct {
-	key     interface{}
-	value   interface{}
-	size    int
-	hits    int
-	element *list.Element
+	key      interface{}
+	value    interface{}
+	size     int
+	hits     int
+	freqNode *list.Element
+}
+
+type listEntry struct {
+	entries map[*item]byte
+	freq    int
 }
 
 // NewLFUDA constructs an LFUDA of the given size in bytes
@@ -85,7 +90,7 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 		// evict until there is room for the new item
 		for {
 			if l.currSize+numBytes > l.size {
-				l.evict(1)
+				l.evict()
 				evicted = true
 			} else {
 				break
@@ -100,7 +105,6 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 		l.items[key] = e
 		l.currSize += numBytes
 		l.increment(e)
-		//fmt.Println("TEST", l.age, e.hits, key, value, count)
 	}
 	return evicted
 }
@@ -115,54 +119,72 @@ func (l *LFUDA) Size() int {
 	return l.currSize
 }
 
-func (l *LFUDA) evict(count int) int {
-	var evicted int
-	for i := 0; i < count; i++ {
-		if elem := l.freqs.Front(); elem != nil {
-			entry := elem.Value.(*item)
-
-			// subtract current size of the cache by the size of the evicted item
-			l.currSize -= entry.size
-
+func (l *LFUDA) evict() bool {
+	if place := l.freqs.Front(); place != nil {
+		for entry := range place.Value.(*listEntry).entries {
 			// set age to the value of the evicted object
 			// cache age should be less than or equal to the minimum key value in the cache
 			l.age = entry.hits
-			delete(l.items, entry.key)
-			l.freqs.Remove(elem)
-			if l.onEvict != nil {
-				l.onEvict(entry.key, entry.value)
-			}
+
+			// since entries is a map this is a random key in the lowest frequency node
+			l.Remove(entry.key)
+			return true
 		}
-		evicted++
 	}
-	return evicted
+	return false
 }
 
 func (l *LFUDA) increment(e *item) {
+	oldNode := e.freqNode
+	cursor := e.freqNode
 	var nextPlace *list.Element
-	if e.element == nil {
+
+	if cursor == nil {
 		// new entry
 		e.hits = l.age + 1
-		e.element = l.freqs.PushFront(e)
+		nextPlace = l.freqs.Front()
 	} else {
 		if e.hits < l.age {
 			e.hits = l.age
 		}
 		e.hits++
+		nextPlace = cursor.Next()
 	}
 
+	// move up until hits is < next frequency node's
 	for {
-		// move up until hits is < next element's
-		nextPlace = e.element.Next()
-		// we've reached the back
-		if nextPlace == nil {
-			l.freqs.MoveToBack(e.element)
+		// we've reached the back or the point where the next frequency
+		// node is greater than the item's hits count.  Either way, create
+		// a new frequency node
+		if nextPlace == nil || nextPlace.Value.(*listEntry).freq > e.hits {
+			// create a new frequency node
+			li := new(listEntry)
+			li.freq = e.hits
+			li.entries = make(map[*item]byte)
+			if cursor != nil {
+				nextPlace = l.freqs.InsertAfter(li, cursor)
+			} else {
+				nextPlace = l.freqs.PushFront(li)
+			}
 			break
-		} else if e.hits <= nextPlace.Value.(*item).hits {
+		} else if nextPlace.Value.(*listEntry).freq == e.hits {
+			// found the right place
 			break
-		} else if e.hits > nextPlace.Value.(*item).hits {
-			l.freqs.MoveAfter(e.element, nextPlace.Value.(*item).element)
+		} else if e.hits > nextPlace.Value.(*listEntry).freq {
+			// keep searching
+			cursor = nextPlace
+			nextPlace = cursor.Next()
 		}
+	}
+
+	// set the right frequency node in the master list
+	e.freqNode = nextPlace
+	nextPlace.Value.(*listEntry).entries[e] = 1
+
+	// clenaup
+	if oldNode != nil {
+		// remove from old position
+		l.remEntry(oldNode, e)
 	}
 }
 
@@ -193,21 +215,34 @@ func (l *LFUDA) Remove(key interface{}) bool {
 		if l.onEvict != nil {
 			l.onEvict(item.key, item.value)
 		}
-		l.currSize -= item.size
-		l.freqs.Remove(item.element)
 		delete(l.items, key)
+		l.remEntry(item.freqNode, item)
+
+		// subtract current size of the cache by the size of the evicted item
+		l.currSize -= item.size
+
 		return true
 	}
 	return false
+}
+
+func (l *LFUDA) remEntry(place *list.Element, entry *item) {
+	entries := place.Value.(*listEntry).entries
+	delete(entries, entry)
+	if len(entries) == 0 {
+		l.freqs.Remove(place)
+	}
 }
 
 // Keys returns a slice of the keys in the cache ordered by frequency
 func (l *LFUDA) Keys() []interface{} {
 	keys := make([]interface{}, len(l.items))
 	i := 0
-	for ent := l.freqs.Back(); ent != nil; ent = ent.Prev() {
-		keys[i] = ent.Value.(*item).key
-		i++
+	for node := l.freqs.Back(); node != nil; node = node.Prev() {
+		for ent := range node.Value.(*listEntry).entries {
+			keys[i] = ent.key
+			i++
+		}
 	}
 	return keys
 }
