@@ -227,14 +227,15 @@ func TestEvictBigValue(t *testing.T) {
 		t.Errorf("cache should have contained key a")
 	}
 
+	// may take couple to evict key a since it will share a frequency node with other keys at this point
 	c.Set("x", "x")
-	c.Set("z", "z")
+	c.Set("y", "y")
 
 	if ok := c.Contains("a"); ok {
 		t.Errorf("cache should NOT have contained key a now")
 	}
 
-	if c.Size() != 4 {
-		t.Errorf("cache should have size 4 bytes at this point: %d", c.Size())
+	if c.Size() > 4 || c.Size() < 3 {
+		t.Errorf("cache should have size 3 or 4 bytes at this point: %d", c.Size())
 	}
 }
