@@ -14,12 +14,33 @@ type Cache struct {
 
 // New creates an lfuda of the given size.
 func New(size int) *Cache {
-	return NewWithEvict(size, nil)
+	return newWithEvict(size, "LFUDA", nil)
+}
+
+// NewGDSF creates an lfuda of the given size.
+func NewGDSF(size int) *Cache {
+	return newWithEvict(size, "GDSF", nil)
 }
 
 // NewWithEvict constructs a fixed size cache with the given eviction
 // callback.
 func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) *Cache {
+	return newWithEvict(size, "LFUDA", onEvicted)
+}
+
+// NewGDSFWithEvict constructs a fixed size cache with the given eviction
+// callback.
+func NewGDSFWithEvict(size int, onEvicted func(key interface{}, value interface{})) *Cache {
+	return newWithEvict(size, "GDSF", onEvicted)
+}
+
+func newWithEvict(size int, policy string, onEvicted func(key interface{}, value interface{})) *Cache {
+	if policy == "GDSF" {
+		gdsf := simplelfuda.NewGDSF(size, simplelfuda.EvictCallback(onEvicted))
+		return &Cache{
+			lfuda: gdsf,
+		}
+	}
 	lfuda := simplelfuda.NewLFUDA(size, simplelfuda.EvictCallback(onEvicted))
 	return &Cache{
 		lfuda: lfuda,
