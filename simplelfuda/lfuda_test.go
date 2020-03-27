@@ -181,7 +181,7 @@ func TestEvict(t *testing.T) {
 	}
 
 	if c.Age() != 10 {
-		t.Errorf("cache should have aged for each eviction: %d", c.Age())
+		t.Errorf("cache should have aged for each eviction: %f", c.Age())
 	}
 
 	if ok := c.Contains("a"); !ok {
@@ -204,7 +204,7 @@ func TestEvictBigValue(t *testing.T) {
 	c.Set("c", "c")
 
 	if c.Size() != 10 {
-		t.Errorf("cache should have size 10 bytes at this point: %d", c.Size())
+		t.Errorf("cache should have size 10 bytes at this point: %f", c.Size())
 	}
 
 	// make key a popular
@@ -220,7 +220,7 @@ func TestEvictBigValue(t *testing.T) {
 	}
 
 	if c.Age() != 10 {
-		t.Errorf("cache should have aged for each eviction: %d", c.Age())
+		t.Errorf("cache should have aged for each eviction: %f", c.Age())
 	}
 
 	if ok := c.Contains("a"); !ok {
@@ -236,6 +236,55 @@ func TestEvictBigValue(t *testing.T) {
 	}
 
 	if c.Size() > 4 || c.Size() < 3 {
-		t.Errorf("cache should have size 3 or 4 bytes at this point: %d", c.Size())
+		t.Errorf("cache should have size 3 or 4 bytes at this point: %f", c.Size())
+	}
+}
+
+func TestEvictGDSF(t *testing.T) {
+	c := NewGDSF(10, nil)
+	c.Set("a", "aaaaaaaa")
+	c.Set("b", "b")
+	c.Set("c", "c")
+
+	if c.Size() != 10 {
+		t.Errorf("cache should have size 10 bytes at this point: %f", c.Size())
+	}
+
+	// make key a popular
+	for i := 0; i < 10; i++ {
+		c.Get("a")
+	}
+
+	// increase cache age
+	for j := 0; j < 10; j++ {
+		c.Set(j, j)
+	}
+
+	if ok := c.Contains("a"); ok {
+		t.Errorf("cache should not have contained key a now")
+	}
+
+	c.Set("a", "aaaaaaaa")
+	// make key a more popular
+	for i := 0; i < 50; i++ {
+		c.Get("a")
+	}
+
+	// increase cache age
+	for j := 0; j < 10; j++ {
+		c.Set(j, j)
+	}
+
+	if ok := c.Contains("a"); !ok {
+		t.Errorf("cache should have contained key a")
+	}
+
+	// increase cache age
+	for j := 0; j < 10; j++ {
+		c.Set(j, j)
+	}
+
+	if ok := c.Contains("a"); ok {
+		t.Errorf("cache should NOT have contained key a now")
 	}
 }

@@ -16,32 +16,36 @@ Differences between LFUDA and regular LFU cache:
 // EvictCallback is used to get a callback when a LFUDA entry is evicted
 type EvictCallback func(key interface{}, value interface{})
 
+type cachePolicy func(element *item, cacheAge float64) float64
+
 // LFUDA is a non-threadsafe fixed size LFU with Dynamic Aging Cache
 type LFUDA struct {
 	// size of the entire cache in bytes
-	size     int
-	currSize int
+	size     float64
+	currSize float64
 	items    map[interface{}]*item
 	freqs    *list.List
 	onEvict  EvictCallback
-	age      int
+	age      float64
+	policy   cachePolicy
 }
 
 type item struct {
-	key      interface{}
-	value    interface{}
-	size     int
-	hits     int
-	freqNode *list.Element
+	key         interface{}
+	value       interface{}
+	size        float64
+	hits        float64
+	priorityKey float64
+	freqNode    *list.Element
 }
 
 type listEntry struct {
-	entries map[*item]byte
-	freq    int
+	entries     map[*item]byte
+	priorityKey float64
 }
 
-// NewLFUDA constructs an LFUDA of the given size in bytes
-func NewLFUDA(size int, onEvict EvictCallback) *LFUDA {
+// NewGDSF constructs an LFUDA of the given size in bytes and uses the GDSF eviction policy
+func NewGDSF(size float64, onEvict EvictCallback) *LFUDA {
 	return &LFUDA{
 		size:     size,
 		currSize: 0,
@@ -49,6 +53,20 @@ func NewLFUDA(size int, onEvict EvictCallback) *LFUDA {
 		freqs:    list.New(),
 		onEvict:  onEvict,
 		age:      0,
+		policy:   gdsfPolicy,
+	}
+}
+
+// NewLFUDA constructs an LFUDA of the given size in bytes and uses the LFUDA eviction policy
+func NewLFUDA(size float64, onEvict EvictCallback) *LFUDA {
+	return &LFUDA{
+		size:     size,
+		currSize: 0,
+		items:    make(map[interface{}]*item),
+		freqs:    list.New(),
+		onEvict:  onEvict,
+		age:      0,
+		policy:   lfudaPolicy,
 	}
 }
 
@@ -80,7 +98,7 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 	} else {
 		// check if we need to evict
 		// convert to bytes so we can get the size of the value
-		numBytes := len([]byte(fmt.Sprintf("%v", value.(interface{}))))
+		numBytes := float64(len([]byte(fmt.Sprintf("%v", value.(interface{})))))
 
 		// check this value will even fit in the cache.  if not just return
 		if l.size < numBytes {
@@ -115,7 +133,7 @@ func (l *LFUDA) Len() int {
 }
 
 // Size returns the number of items in the cache.
-func (l *LFUDA) Size() int {
+func (l *LFUDA) Size() float64 {
 	return l.currSize
 }
 
@@ -124,7 +142,7 @@ func (l *LFUDA) evict() bool {
 		for entry := range place.Value.(*listEntry).entries {
 			// set age to the value of the evicted object
 			// cache age should be less than or equal to the minimum key value in the cache
-			l.age = entry.hits
+			l.age = entry.priorityKey
 
 			// since entries is a map this is a random key in the lowest frequency node
 			l.Remove(entry.key)
@@ -141,25 +159,24 @@ func (l *LFUDA) increment(e *item) {
 
 	if cursor == nil {
 		// new entry
-		e.hits = l.age + 1
 		nextPlace = l.freqs.Front()
 	} else {
-		if e.hits < l.age {
-			e.hits = l.age
-		}
-		e.hits++
 		nextPlace = cursor.Next()
 	}
+
+	// must update item's hits before updating priorityKey
+	e.hits++
+	e.priorityKey = l.policy(e, l.age)
 
 	// move up until hits is < next frequency node's
 	for {
 		// we've reached the back or the point where the next frequency
 		// node is greater than the item's hits count.  Either way, create
 		// a new frequency node
-		if nextPlace == nil || nextPlace.Value.(*listEntry).freq > e.hits {
+		if nextPlace == nil || nextPlace.Value.(*listEntry).priorityKey > e.priorityKey {
 			// create a new frequency node
 			li := new(listEntry)
-			li.freq = e.hits
+			li.priorityKey = e.priorityKey
 			li.entries = make(map[*item]byte)
 			if cursor != nil {
 				nextPlace = l.freqs.InsertAfter(li, cursor)
@@ -167,10 +184,10 @@ func (l *LFUDA) increment(e *item) {
 				nextPlace = l.freqs.PushFront(li)
 			}
 			break
-		} else if nextPlace.Value.(*listEntry).freq == e.hits {
+		} else if nextPlace.Value.(*listEntry).priorityKey == e.priorityKey {
 			// found the right place
 			break
-		} else if e.hits > nextPlace.Value.(*listEntry).freq {
+		} else if e.priorityKey > nextPlace.Value.(*listEntry).priorityKey {
 			// keep searching
 			cursor = nextPlace
 			nextPlace = cursor.Next()
@@ -248,6 +265,16 @@ func (l *LFUDA) Keys() []interface{} {
 }
 
 // Age returns the cache age factor
-func (l *LFUDA) Age() int {
+func (l *LFUDA) Age() float64 {
 	return l.age
+}
+
+// Ki = Ci * Fi + L where C is set to 1
+func lfudaPolicy(element *item, cacheAge float64) float64 {
+	return element.hits + cacheAge
+}
+
+// Ki = Fi * Ci / Si + L where C is set to 1
+func gdsfPolicy(element *item, cacheAge float64) float64 {
+	return (element.hits / element.size) + cacheAge
 }

@@ -1,6 +1,7 @@
 package lfuda
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 )
@@ -129,6 +130,55 @@ func TestLFUDA(t *testing.T) {
 	}
 	if _, ok := l.Get(200); ok {
 		t.Errorf("should contain nothing")
+	}
+}
+
+func TestGDSF(t *testing.T) {
+	l := NewGDSF(666)
+
+	numSet := 0
+	for i := 10; i < 20; i++ {
+		if l.Set(i, math.Pow(2, float64(i))) {
+			numSet++
+		}
+	}
+
+	for i := 100; i < 1000; i++ {
+		if l.Set(i, i) {
+			numSet++
+		}
+	}
+	if l.Len() != 222 || l.Len() != len(l.Keys()) {
+		t.Errorf("bad len: %v", l.Len())
+	}
+
+	// all large values should be evicted
+	for _, k := range l.Keys() {
+		if v, ok := l.Get(k); !ok || v != k {
+			t.Fatalf("bad key: %v, %v, %t", k, v, ok)
+		}
+	}
+
+	// these should all be misses since their hits will be too low
+	// relative to newer keys set when the cache is more aged
+	for i := 100; i < 765; i++ {
+		_, ok := l.Get(i)
+		if ok {
+			t.Fatalf("should not be in cache")
+		}
+	}
+
+	if ok := l.Set(256, 256); !ok {
+		t.Errorf("Wasn't able to set key/value in cache (but should have been)")
+	}
+
+	if val, _ := l.Get(256); val != 256 {
+		t.Errorf("Wrong value returned for key")
+	}
+
+	// expect 256 to be the top hit in l.Keys()
+	if l.Keys()[0] != 256 {
+		t.Errorf("out of order key (last set of keys should have hits=5 and should be first): %d", l.Keys()[0])
 	}
 }
 
