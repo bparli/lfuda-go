@@ -12,7 +12,7 @@ In addition to basic LFU functionality it behaves according to the following log
   * Depending on the policy used, LFUDA or GreedyDual-Size with Frequency (GDSF), the priority key is determined by the item's frequency and the cache's age.  If using GDSF the item's size is also a factor.
   * Every cache eviction sets the global "age" counter to the evicted item's priority key,
   * When setting a new item, its priority key counter should be set to the cache's "age" value
-  * When an existing item is updated, its priority key counter is incremented by 1 to at least "age" + 1.
+  * When an existing item is updated, its hits counter is incremented by 1, and its priority key updated depending on the policy.
 
 ## Usage
 The default cache uses a LFUDA policy, like so:
