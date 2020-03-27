@@ -13,28 +13,28 @@ type Cache struct {
 }
 
 // New creates an lfuda of the given size.
-func New(size int) *Cache {
+func New(size float64) *Cache {
 	return newWithEvict(size, "LFUDA", nil)
 }
 
 // NewGDSF creates an lfuda of the given size.
-func NewGDSF(size int) *Cache {
+func NewGDSF(size float64) *Cache {
 	return newWithEvict(size, "GDSF", nil)
 }
 
 // NewWithEvict constructs a fixed size cache with the given eviction
 // callback.
-func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) *Cache {
+func NewWithEvict(size float64, onEvicted func(key interface{}, value interface{})) *Cache {
 	return newWithEvict(size, "LFUDA", onEvicted)
 }
 
 // NewGDSFWithEvict constructs a fixed size cache with the given eviction
 // callback.
-func NewGDSFWithEvict(size int, onEvicted func(key interface{}, value interface{})) *Cache {
+func NewGDSFWithEvict(size float64, onEvicted func(key interface{}, value interface{})) *Cache {
 	return newWithEvict(size, "GDSF", onEvicted)
 }
 
-func newWithEvict(size int, policy string, onEvicted func(key interface{}, value interface{})) *Cache {
+func newWithEvict(size float64, policy string, onEvicted func(key interface{}, value interface{})) *Cache {
 	if policy == "GDSF" {
 		gdsf := simplelfuda.NewGDSF(size, simplelfuda.EvictCallback(onEvicted))
 		return &Cache{
@@ -143,7 +143,7 @@ func (c *Cache) Len() (length int) {
 }
 
 // Size returns the current size of the cache in bytes.
-func (c *Cache) Size() (size int) {
+func (c *Cache) Size() (size float64) {
 	c.lock.RLock()
 	size = c.lfuda.Size()
 	c.lock.RUnlock()
@@ -151,7 +151,7 @@ func (c *Cache) Size() (size int) {
 }
 
 // Age returns the cache's current age
-func (c *Cache) Age() (age int) {
+func (c *Cache) Age() (age float64) {
 	c.lock.RLock()
 	age = c.lfuda.Age()
 	c.lock.RUnlock()

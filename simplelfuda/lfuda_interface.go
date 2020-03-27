@@ -26,11 +26,11 @@ type LFUDACache interface {
 	Len() int
 
 	// Returns the current size of the cache in bytes.
-	Size() int
+	Size() float64
 
 	// Clears all cache entries.
 	Purge()
 
 	// Returns current age factor of the cache
-	Age() int
+	Age() float64
 }
