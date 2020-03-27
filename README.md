@@ -9,11 +9,14 @@ With Dynamic Aging/LFUDA, this is done in a parameter-less way, making it easier
 ## How it works
 In addition to basic LFU functionality it behaves according to the following logic:
   * The cache dynamically "ages" through a global "age" counter
-  * Every cache eviction sets the global "age" counter to the evicted item's hits counter,
-  * When setting a new item, its "hits" counter should be set to the cache's "age" value
-  * When an existing item is updated, its "hits" counter is incremented by 1 to at least "age" + 1.
+  * Depending on the policy used, LFUDA or GreedyDual-Size with Frequency (GDSF), the priority key is determined by the item's frequency and the cache's age.  If using GDSF the item's size is also a factor.
+  * Every cache eviction sets the global "age" counter to the evicted item's priority key,
+  * When setting a new item, its priority key counter should be set to the cache's "age" value
+  * When an existing item is updated, its priority key counter is incremented by 1 to at least "age" + 1.
 
 ## Usage
+The default cache uses a LFUDA policy, like so:
+
 ```go
 onEvicted := func(k interface{}, v interface{}) {
   if k != v {
@@ -25,7 +28,7 @@ l := lfuda.NewWithEvict(128, onEvicted)
 
 for i := 0; i < 256; i++ {
   if !l.Set(i, i) {
-    fmt.Printf("Unable to set key/value: %v: %v\n", i, i)
+    fmt.Printf("Setting key/value: %v: %v resulted in eviction\n", i, i)
   }
 }
 
@@ -37,6 +40,18 @@ for i := 0; i < 256; i++ {
   }
 }
 
+```
+
+The GDSF policy is also available as an alternative
+
+```go
+l := lfuda.NewGDSF(128)
+
+for i := 0; i < 256; i++ {
+  if !l.Set(i, i) {
+    fmt.Printf("Setting key/value: %v: %v resulted in eviction\n", i, i)
+  }
+}
 ```
 
 ## Acknowledgements
