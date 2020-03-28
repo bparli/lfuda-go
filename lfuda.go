@@ -17,21 +17,32 @@ func New(size float64) *Cache {
 	return newWithEvict(size, "LFUDA", nil)
 }
 
-// NewGDSF creates an lfuda of the given size.
+// NewGDSF creates an lfuda of the given size and the GDSF cache policy.
 func NewGDSF(size float64) *Cache {
 	return newWithEvict(size, "GDSF", nil)
 }
 
-// NewWithEvict constructs a fixed size cache with the given eviction
+// NewLFU creates an lfuda of the given size.
+func NewLFU(size float64) *Cache {
+	return newWithEvict(size, "LFU", nil)
+}
+
+// NewWithEvict constructs a fixed size LFUDA cache with the given eviction
 // callback.
 func NewWithEvict(size float64, onEvicted func(key interface{}, value interface{})) *Cache {
 	return newWithEvict(size, "LFUDA", onEvicted)
 }
 
-// NewGDSFWithEvict constructs a fixed size cache with the given eviction
+// NewGDSFWithEvict constructs a fixed GDSF size cache with the given eviction
 // callback.
 func NewGDSFWithEvict(size float64, onEvicted func(key interface{}, value interface{})) *Cache {
 	return newWithEvict(size, "GDSF", onEvicted)
+}
+
+// NewLFUWithEvict constructs a fixed size LFU cache with the given eviction
+// callback.
+func NewLFUWithEvict(size float64, onEvicted func(key interface{}, value interface{})) *Cache {
+	return newWithEvict(size, "LFU", onEvicted)
 }
 
 func newWithEvict(size float64, policy string, onEvicted func(key interface{}, value interface{})) *Cache {
@@ -39,6 +50,11 @@ func newWithEvict(size float64, policy string, onEvicted func(key interface{}, v
 		gdsf := simplelfuda.NewGDSF(size, simplelfuda.EvictCallback(onEvicted))
 		return &Cache{
 			lfuda: gdsf,
+		}
+	} else if policy == "LFU" {
+		lfu := simplelfuda.NewLFU(size, simplelfuda.EvictCallback(onEvicted))
+		return &Cache{
+			lfuda: lfu,
 		}
 	}
 	lfuda := simplelfuda.NewLFUDA(size, simplelfuda.EvictCallback(onEvicted))

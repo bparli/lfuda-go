@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestLFU(t *testing.T) {
+func TestLFUDA(t *testing.T) {
 	c := NewLFUDA(2, nil)
 	c.Set("a", "a")
 	if v, _ := c.Get("a"); v != "a" {
@@ -286,5 +286,30 @@ func TestEvictGDSF(t *testing.T) {
 
 	if ok := c.Contains("a"); ok {
 		t.Errorf("cache should NOT have contained key a now")
+	}
+}
+
+func TestEvictLFU(t *testing.T) {
+	c := NewLFU(10, nil)
+	c.Set("a", "aaaaaaaa")
+	c.Set("b", "b")
+	c.Set("c", "c")
+
+	if c.Size() != 10 {
+		t.Errorf("cache should have size 10 bytes at this point: %f", c.Size())
+	}
+
+	// make key a popular
+	for i := 0; i < 10; i++ {
+		c.Get("a")
+	}
+
+	// increasing cache age should have no effect
+	for j := 0; j < 100; j++ {
+		c.Set(j, j)
+	}
+
+	if ok := c.Contains("a"); !ok {
+		t.Errorf("cache should still contain key a")
 	}
 }

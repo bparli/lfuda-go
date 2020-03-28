@@ -70,6 +70,19 @@ func NewLFUDA(size float64, onEvict EvictCallback) *LFUDA {
 	}
 }
 
+// NewLFU constructs an LFUDA of the given size in bytes and uses the LFU eviction policy
+func NewLFU(size float64, onEvict EvictCallback) *LFUDA {
+	return &LFUDA{
+		size:     size,
+		currSize: 0,
+		items:    make(map[interface{}]*item),
+		freqs:    list.New(),
+		onEvict:  onEvict,
+		age:      0,
+		policy:   lfuPolicy,
+	}
+}
+
 // Get looks up a key's value from the cache
 func (l *LFUDA) Get(key interface{}) (interface{}, bool) {
 	if e, ok := l.items[key]; ok {
@@ -277,4 +290,8 @@ func lfudaPolicy(element *item, cacheAge float64) float64 {
 // Ki = Fi * Ci / Si + L where C is set to 1
 func gdsfPolicy(element *item, cacheAge float64) float64 {
 	return (element.hits / element.size) + cacheAge
+}
+
+func lfuPolicy(element *item, cacheAge float64) float64 {
+	return element.hits
 }
