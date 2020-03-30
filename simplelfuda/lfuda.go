@@ -111,7 +111,15 @@ func (l *LFUDA) Set(key interface{}, value interface{}) bool {
 	} else {
 		// check if we need to evict
 		// convert to bytes so we can get the size of the value
-		numBytes := float64(len([]byte(fmt.Sprintf("%v", value.(interface{})))))
+
+		var numBytes float64
+		// if the value is binary
+		if valBytes, ok := value.([]byte); ok {
+			numBytes = float64(len(valBytes))
+		} else {
+			// otherwise use the default format
+			numBytes = float64(len([]byte(fmt.Sprintf("%v", value.(interface{})))))
+		}
 
 		// check this value will even fit in the cache.  if not just return
 		if l.size < numBytes {
