@@ -163,7 +163,9 @@ func (l *LFUDA) evict() bool {
 		for entry := range place.Value.(*listEntry).entries {
 			// set age to the value of the evicted object
 			// cache age should be less than or equal to the minimum key value in the cache
-			l.age = entry.priorityKey
+			if l.age < entry.priorityKey {
+				l.age = entry.priorityKey
+			}
 
 			// since entries is a map this is a random key in the lowest frequency node
 			l.Remove(entry.key)
