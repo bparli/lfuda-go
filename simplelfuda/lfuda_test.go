@@ -313,3 +313,38 @@ func TestEvictLFU(t *testing.T) {
 		t.Errorf("cache should still contain key a")
 	}
 }
+
+func TestCalcBytes(t *testing.T) {
+	a := make([]int16, 0, 1)       // 0
+	b := [...]int8{2, 3, 5, 7, 11} // 5
+	c := []int64{2, 3, 5, 7, 11}   // 40
+	d := []int32{}                 // 0
+
+	if res := calcBytes(append(a, 2)); res != float64(2) {
+		t.Errorf("Size is not correct.  Got %f but should be %d", res, 3)
+	}
+
+	if res := calcBytes(b); res != float64(5) {
+		t.Errorf("Size is not correct.  Got %f but should be %d", res, 5)
+	}
+	if res := calcBytes(c); res != float64(40) {
+		t.Errorf("Size is not correct.  Got %f but should be %d", res, 40)
+	}
+	if res := calcBytes(d); res != float64(0) {
+		t.Errorf("Size is not correct.  Got %f but should be %d", res, 0)
+	}
+
+	tests := map[interface{}]int{
+		true:             1,
+		int16(5):         2,
+		1278624387349734: 16,
+		"We must not confuse dissent with disloyalty. We must remember always that accusation is not proof and that conviction depends upon evidence and due process of law. We will not walk in fear, one of another. We will not be driven by fear into an age of unreason, if we dig deep in our history and our doctrine, and remember that we are not descended from fearful men — not from men who feared to write, to speak, to associate and to defend causes that were, for the moment, unpopular.": 484,
+		12: 2,
+	}
+
+	for test, res := range tests {
+		if calcBytes(test) != float64(res) {
+			t.Errorf("cache should have size 10 bytes at this point: %d", res)
+		}
+	}
+}
